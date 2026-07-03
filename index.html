@@ -1,0 +1,727 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#1b3a2f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Ledger">
+<title>Ledger &mdash; Household Budget</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="icon-192.png">
+<style>
+  :root{
+    --ink:#1c2b24;
+    --paper:#f5f2ea;
+    --paper-line:#dcd6c4;
+    --forest:#1b3a2f;
+    --forest-2:#234b3c;
+    --rust:#c96a4b;
+    --gold:#d9c896;
+    --red:#a53d3d;
+    --green:#3f7a56;
+    --muted:#6b6558;
+    --radius:14px;
+    --mono: 'IBM Plex Mono', 'SFMono-Regular', Consolas, monospace;
+    --serif: 'Source Serif Pro', Georgia, 'Times New Roman', serif;
+    --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Roboto, sans-serif;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color: transparent;}
+  html,body{margin:0; padding:0; background:var(--paper); color:var(--ink); font-family:var(--sans); height:100%;}
+  html{overscroll-behavior-y:contain;}
+  body{
+    background-image: repeating-linear-gradient(to bottom, transparent, transparent 35px, var(--paper-line) 36px);
+    padding-bottom: 90px;
+    overscroll-behavior-y:contain;
+    min-height:100%;
+  }
+  body.modal-open{ position:fixed; left:0; right:0; width:100%; overflow:hidden; }
+  header.top{
+    background:var(--forest);
+    color:var(--paper);
+    padding:22px 20px 18px;
+    position:sticky; top:0; z-index:20;
+    box-shadow:0 2px 10px rgba(0,0,0,0.15);
+  }
+  header.top h1{
+    font-family:var(--serif);
+    font-weight:600;
+    font-size:1.5rem;
+    margin:0 0 2px;
+    letter-spacing:0.3px;
+  }
+  header.top .sub{font-size:0.78rem; opacity:0.75; letter-spacing:0.4px; text-transform:uppercase;}
+  .month-nav{
+    display:flex; align-items:center; justify-content:space-between;
+    margin-top:14px;
+  }
+  .month-nav button{
+    background:none; border:1px solid rgba(245,242,234,0.35); color:var(--paper);
+    border-radius:8px; width:36px; height:36px; font-size:1.1rem; cursor:pointer;
+  }
+  .month-nav .month-label{
+    font-family:var(--mono); font-size:1.05rem; letter-spacing:1px;
+  }
+
+  main{max-width:640px; margin:0 auto; padding:18px 16px 10px;}
+
+  .ledger-card{
+    background:var(--paper);
+    border:1px solid var(--paper-line);
+    border-radius:var(--radius);
+    padding:16px 16px 8px;
+    margin-bottom:18px;
+  }
+  .ledger-totals{
+    display:grid; grid-template-columns:1fr 1fr; gap:0;
+    border:1px solid var(--ink);
+    border-radius:10px;
+    overflow:hidden;
+    margin-bottom:8px;
+  }
+  .ledger-totals .col{padding:14px; text-align:center;}
+  .ledger-totals .col.exp{border-right:1px solid var(--ink); background:rgba(165,61,61,0.06);}
+  .ledger-totals .col.inc{background:rgba(63,122,86,0.08);}
+  .ledger-totals .label{font-size:0.7rem; text-transform:uppercase; letter-spacing:1px; color:var(--muted);}
+  .ledger-totals .amt{font-family:var(--mono); font-size:1.35rem; font-weight:600; margin-top:2px;}
+  .col.exp .amt{color:var(--red);}
+  .col.inc .amt{color:var(--green);}
+
+  .net-line{
+    text-align:center; padding:10px 0 4px;
+    font-family:var(--mono); font-size:1.15rem; font-weight:700;
+    border-top: 3px double var(--ink);
+    margin-top:4px;
+  }
+  .net-line.positive{color:var(--green);}
+  .net-line.negative{color:var(--red);}
+
+  .section-title{
+    font-family:var(--serif); font-size:1.05rem; margin:22px 0 8px 2px;
+    display:flex; align-items:center; justify-content:space-between;
+  }
+  .section-title .rule{flex:1; border-bottom:1px solid var(--paper-line); margin-left:10px;}
+
+  .group{margin-bottom:14px;}
+  .group-name{
+    font-size:0.72rem; text-transform:uppercase; letter-spacing:1px;
+    color:var(--muted); margin:10px 2px 4px;
+  }
+  .cat-row{
+    display:flex; justify-content:space-between; align-items:center;
+    background:#fff; border:1px solid var(--paper-line); border-radius:10px;
+    padding:10px 12px; margin-bottom:6px;
+  }
+  .cat-row .name{font-size:0.92rem;}
+  .cat-row .amt{font-family:var(--mono); font-size:0.95rem; font-weight:600;}
+  .cat-row.expense .amt{color:var(--red);}
+  .cat-row.income .amt{color:var(--green);}
+  .cat-row .entries-count{font-size:0.7rem; color:var(--muted); margin-left:6px;}
+
+  .empty-note{
+    text-align:center; color:var(--muted); font-size:0.85rem; padding:20px 10px;
+  }
+
+  nav.tabbar{
+    position:fixed; bottom:0; left:0; right:0;
+    background:var(--forest); display:flex;
+    padding:8px 6px calc(8px + env(safe-area-inset-bottom));
+    z-index:30; box-shadow:0 -2px 10px rgba(0,0,0,0.2);
+  }
+  nav.tabbar button{
+    flex:1; background:none; border:none; color:rgba(245,242,234,0.55);
+    font-size:0.68rem; padding:6px 2px; cursor:pointer; font-family:var(--sans);
+    display:flex; flex-direction:column; align-items:center; gap:3px;
+  }
+  nav.tabbar button.active{color:var(--paper);}
+  nav.tabbar button .ic{font-size:1.25rem;}
+
+  .fab{
+    position:fixed; right:20px; bottom:78px; z-index:25;
+    width:58px; height:58px; border-radius:50%;
+    background:var(--rust); color:#fff; border:none;
+    font-size:1.8rem; box-shadow:0 4px 14px rgba(0,0,0,0.3);
+    cursor:pointer; display:flex; align-items:center; justify-content:center;
+    padding:0 0 3px;
+  }
+  .amt-wrap{display:flex; flex-direction:column; align-items:flex-end;}
+  .budget-note{font-size:0.62rem; color:var(--muted); font-family:var(--mono); margin-top:1px; white-space:nowrap;}
+  .cat-row.over .amt{color:var(--red); font-weight:700;}
+  .budget-sub{font-size:0.65rem; color:var(--muted); font-family:var(--mono); margin-top:2px; letter-spacing:0.3px;}
+  .cat-manage-row .budget-input{flex:0 0 74px; font-family:var(--mono); text-align:right;}
+  .add-cat-row .budget-input{flex:0 0 74px; font-family:var(--mono); text-align:right;}
+  .cat-manage-hint{font-size:0.72rem; color:var(--muted); margin:0 2px 8px;}
+
+  .sheet-backdrop{
+    position:fixed; inset:0; background:rgba(0,0,0,0.4); z-index:40;
+    display:none; align-items:flex-end; justify-content:center;
+  }
+  .sheet-backdrop.open{display:flex;}
+  .sheet{
+    background:var(--paper); width:100%; max-width:640px;
+    border-radius:20px 20px 0 0; padding:20px 20px calc(20px + env(safe-area-inset-bottom));
+    max-height:88vh; overflow-y:auto;
+  }
+  .sheet h2{font-family:var(--serif); margin:0 0 14px; font-size:1.2rem;}
+  .field{margin-bottom:14px;}
+  .field label{display:block; font-size:0.75rem; text-transform:uppercase; letter-spacing:0.6px; color:var(--muted); margin-bottom:5px;}
+  .field input, .field select, .field textarea{
+    width:100%; padding:11px 12px; border-radius:9px; border:1px solid var(--paper-line);
+    font-size:1rem; background:#fff; font-family:var(--sans); color:var(--ink);
+  }
+  .field input[type=number]{font-family:var(--mono);}
+  .type-toggle{display:flex; gap:8px; margin-bottom:14px;}
+  .type-toggle button{
+    flex:1; padding:10px; border-radius:9px; border:1px solid var(--paper-line);
+    background:#fff; font-size:0.9rem; cursor:pointer; font-weight:600;
+  }
+  .type-toggle button.active.expense{background:var(--red); color:#fff; border-color:var(--red);}
+  .type-toggle button.active.income{background:var(--green); color:#fff; border-color:var(--green);}
+
+  .btn-row{display:flex; gap:10px; margin-top:6px;}
+  .btn{
+    flex:1; padding:13px; border-radius:10px; border:none; font-size:0.95rem;
+    font-weight:600; cursor:pointer;
+  }
+  .btn.primary{background:var(--forest); color:#fff;}
+  .btn.secondary{background:none; border:1px solid var(--paper-line); color:var(--ink);}
+  .btn.danger{background:var(--red); color:#fff;}
+
+  .entry-list-item{
+    display:flex; justify-content:space-between; align-items:center;
+    padding:9px 2px; border-bottom:1px solid var(--paper-line); font-size:0.88rem;
+  }
+  .entry-list-item .meta{color:var(--muted); font-size:0.75rem;}
+  .entry-list-item .amt{font-family:var(--mono); font-weight:600;}
+  .entry-list-item button.del{background:none; border:none; color:var(--red); font-size:1rem; cursor:pointer; padding:4px 6px;}
+
+  .history-row{
+    display:flex; justify-content:space-between; align-items:center;
+    background:#fff; border:1px solid var(--paper-line); border-radius:10px;
+    padding:14px 14px; margin-bottom:8px; cursor:pointer;
+  }
+  .history-row .m{font-family:var(--serif); font-size:1.02rem;}
+  .history-row .n{font-family:var(--mono); font-weight:700;}
+
+  .cat-manage-row{
+    display:flex; align-items:center; gap:8px; margin-bottom:6px;
+  }
+  .cat-manage-row input{flex:1; padding:9px 10px; border-radius:8px; border:1px solid var(--paper-line);}
+  .cat-manage-row button{background:none; border:none; color:var(--red); font-size:1.1rem; cursor:pointer;}
+  .add-cat-row{display:flex; gap:8px; margin-top:8px;}
+  .add-cat-row input{flex:1;}
+  .add-cat-row button{background:var(--forest); color:#fff; border:none; border-radius:8px; padding:0 14px; font-size:1.2rem;}
+
+  textarea#importArea{min-height:100px; font-family:var(--mono); font-size:0.8rem;}
+  .hint{font-size:0.78rem; color:var(--muted); margin-top:6px; line-height:1.4;}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <h1>Ledger</h1>
+  <div class="sub">Household Budget</div>
+  <div class="month-nav">
+    <button id="prevMonth" aria-label="Previous month">&#8249;</button>
+    <div class="month-label" id="monthLabel">June 2026</div>
+    <button id="nextMonth" aria-label="Next month">&#8250;</button>
+  </div>
+</header>
+
+<main id="view-dashboard">
+  <div class="ledger-card">
+    <div class="ledger-totals">
+      <div class="col exp">
+        <div class="label">Spent</div>
+        <div class="amt" id="totalExpense">$0</div>
+        <div class="budget-sub" id="budgetExpenseSub"></div>
+      </div>
+      <div class="col inc">
+        <div class="label">Income</div>
+        <div class="amt" id="totalIncome">$0</div>
+        <div class="budget-sub" id="budgetIncomeSub"></div>
+      </div>
+    </div>
+    <div class="net-line" id="netLine">Net &nbsp;$0</div>
+  </div>
+
+  <div class="section-title">Expenses<div class="rule"></div></div>
+  <div id="expenseGroups"></div>
+
+  <div class="section-title">Income<div class="rule"></div></div>
+  <div id="incomeGroups"></div>
+</main>
+
+<main id="view-history" style="display:none;">
+  <div class="section-title">All Months<div class="rule"></div></div>
+  <div id="historyList"></div>
+</main>
+
+<main id="view-categories" style="display:none;">
+  <p class="cat-manage-hint">Optional: set a monthly target next to each category. The Month tab will show actual spending against it.</p>
+  <div class="section-title">Expense Categories<div class="rule"></div></div>
+  <div id="expCatManage"></div>
+  <div class="add-cat-row">
+    <input type="text" id="newExpCatName" placeholder="New expense category">
+    <input type="number" id="newExpCatBudget" class="budget-input" placeholder="Budget">
+    <button onclick="addCategory('expense')">+</button>
+  </div>
+
+  <div class="section-title">Income Categories<div class="rule"></div></div>
+  <div id="incCatManage"></div>
+  <div class="add-cat-row">
+    <input type="text" id="newIncCatName" placeholder="New income category">
+    <input type="number" id="newIncCatBudget" class="budget-input" placeholder="Target">
+    <button onclick="addCategory('income')">+</button>
+  </div>
+</main>
+
+<main id="view-settings" style="display:none;">
+  <div class="section-title">Backup &amp; Transfer<div class="rule"></div></div>
+  <div class="ledger-card">
+    <p class="hint">Since this is checked once a month, sync between phones is manual. After entering this month's numbers on one phone, tap Export, then send the code to the other person (text or email) to import.</p>
+    <div class="btn-row">
+      <button class="btn primary" onclick="exportData()">Export Data</button>
+    </div>
+    <div class="field" style="margin-top:14px;">
+      <label>Paste code to import</label>
+      <textarea id="importArea" placeholder="Paste exported code here"></textarea>
+    </div>
+    <div class="btn-row">
+      <button class="btn secondary" onclick="importData()">Import (Merge)</button>
+    </div>
+    <p class="hint" id="exportHint"></p>
+  </div>
+  <div class="section-title">Reset<div class="rule"></div></div>
+  <div class="ledger-card">
+    <p class="hint">This clears everything on this device. Export first if you want a backup.</p>
+    <div class="btn-row">
+      <button class="btn danger" onclick="resetAll()">Erase All Data</button>
+    </div>
+  </div>
+</main>
+
+<button class="fab" id="fabAdd">+</button>
+
+<nav class="tabbar">
+  <button class="tab active" data-view="dashboard"><span class="ic">&#128203;</span>Month</button>
+  <button class="tab" data-view="history"><span class="ic">&#128197;</span>History</button>
+  <button class="tab" data-view="categories"><span class="ic">&#128209;</span>Categories</button>
+  <button class="tab" data-view="settings"><span class="ic">&#9881;</span>More</button>
+</nav>
+
+<!-- Add Entry Sheet -->
+<div class="sheet-backdrop" id="addSheet" onclick="if(event.target.id==='addSheet') closeSheet();">
+  <div class="sheet">
+    <h2>Add Entry</h2>
+    <div class="type-toggle">
+      <button type="button" class="active expense" id="typeExpenseBtn" onclick="setEntryType('expense')">Expense</button>
+      <button type="button" class="income" id="typeIncomeBtn" onclick="setEntryType('income')">Income</button>
+    </div>
+    <div class="field">
+      <label>Category</label>
+      <select id="entryCategory"></select>
+    </div>
+    <div class="field">
+      <label>Amount</label>
+      <input type="number" id="entryAmount" inputmode="decimal" placeholder="0.00" step="0.01">
+    </div>
+    <div class="field">
+      <label>Note (optional)</label>
+      <input type="text" id="entryNote" placeholder="e.g. Gas station on 6th">
+    </div>
+    <div class="btn-row">
+      <button class="btn secondary" onclick="closeSheet()">Cancel</button>
+      <button class="btn primary" onclick="saveEntry()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Category Detail Sheet (list entries for tap) -->
+<div class="sheet-backdrop" id="detailSheet" onclick="if(event.target.id==='detailSheet') closeDetail();">
+  <div class="sheet">
+    <h2 id="detailTitle">Category</h2>
+    <div id="detailList"></div>
+    <div class="btn-row" style="margin-top:14px;">
+      <button class="btn secondary" onclick="closeDetail()">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const STORAGE_KEY = 'ledgerBudgetData';
+
+const DEFAULT_CATEGORIES = {
+  expense: [
+    {id:'rent', name:'Rent', group:'Housing & Utilities', budget:1221},
+    {id:'water', name:'Water', group:'Housing & Utilities', budget:124},
+    {id:'utilities', name:'Utilities', group:'Housing & Utilities', budget:118},
+    {id:'internet', name:'Internet', group:'Housing & Utilities', budget:55},
+    {id:'icloud', name:'iCloud', group:'Housing & Utilities', budget:3},
+    {id:'experian', name:'Experian', group:'Credit & Subscriptions', budget:8},
+    {id:'phones', name:'Phones', group:'Credit & Subscriptions', budget:80},
+    {id:'chatgpt', name:'ChatGPT', group:'Credit & Subscriptions', budget:16},
+    {id:'gamepass', name:'Game Pass', group:'Credit & Subscriptions', budget:15},
+    {id:'dental', name:'Dental', group:'Health', budget:29},
+    {id:'meds', name:'Meds', group:'Health', budget:8},
+    {id:'gas', name:'Gas', group:'Transportation', budget:70},
+    {id:'charity', name:'Charity', group:'Giving', budget:5},
+    {id:'gifts', name:'Gifts', group:'Giving', budget:0},
+    {id:'rubys-kit', name:"Ruby's Kit", group:'Pets', budget:12},
+    {id:'grocery', name:'Grocery', group:'Food', budget:880},
+    {id:'eating-out', name:'Eating Out', group:'Food', budget:180},
+    {id:'amazon', name:'Amazon', group:'Shopping', budget:300},
+    {id:'other-expense', name:'Other', group:'Miscellaneous', budget:0},
+  ],
+  income: [
+    {id:'lmh', name:'LMH', group:'Paychecks', budget:3000},
+    {id:'spl', name:'SPL', group:'Paychecks', budget:1000},
+    {id:'other-income', name:'Other Income', group:'Paychecks', budget:0},
+  ]
+};
+
+function loadData(){
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if(raw){
+    try{ return JSON.parse(raw); }catch(e){}
+  }
+  return { categories: JSON.parse(JSON.stringify(DEFAULT_CATEGORIES)), months: {} };
+}
+function saveData(){
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+let state = loadData();
+let currentDate = new Date();
+let currentMonthKey = monthKey(currentDate);
+let currentEntryType = 'expense';
+
+function monthKey(d){
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+}
+function monthLabel(d){
+  return d.toLocaleString('default', {month:'long', year:'numeric'});
+}
+function fmt(n){
+  const sign = n<0 ? '-' : '';
+  return sign + '$' + Math.abs(n).toLocaleString(undefined,{minimumFractionDigits:0, maximumFractionDigits:2});
+}
+function getMonth(key){
+  if(!state.months[key]) state.months[key] = { entries: [] };
+  return state.months[key];
+}
+function catById(type, id){
+  return state.categories[type].find(c=>c.id===id);
+}
+function escapeHtml(str){
+  return String(str).replace(/[&<>"']/g, s=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s]));
+}
+
+// ---------- Rendering ----------
+function renderAll(){
+  document.getElementById('monthLabel').textContent = monthLabel(currentDate);
+  renderDashboard();
+  renderHistory();
+  renderCategoryManage();
+}
+
+function renderDashboard(){
+  const m = getMonth(currentMonthKey);
+  let totalExp = 0, totalInc = 0;
+  const expByCat = {}, incByCat = {};
+  m.entries.forEach(e=>{
+    if(e.type==='expense'){ totalExp += e.amount; expByCat[e.categoryId] = (expByCat[e.categoryId]||0)+e.amount; }
+    else { totalInc += e.amount; incByCat[e.categoryId] = (incByCat[e.categoryId]||0)+e.amount; }
+  });
+  document.getElementById('totalExpense').textContent = fmt(totalExp);
+  document.getElementById('totalIncome').textContent = fmt(totalInc);
+  const budgetExp = state.categories.expense.reduce((s,c)=>s+(c.budget||0),0);
+  const budgetInc = state.categories.income.reduce((s,c)=>s+(c.budget||0),0);
+  document.getElementById('budgetExpenseSub').textContent = budgetExp>0 ? 'budget ' + fmt(budgetExp) : '';
+  document.getElementById('budgetIncomeSub').textContent = budgetInc>0 ? 'target ' + fmt(budgetInc) : '';
+  const net = totalInc - totalExp;
+  const netEl = document.getElementById('netLine');
+  netEl.textContent = 'Net   ' + fmt(net);
+  netEl.className = 'net-line ' + (net>=0 ? 'positive' : 'negative');
+
+  document.getElementById('expenseGroups').innerHTML = renderGroups('expense', expByCat, m.entries);
+  document.getElementById('incomeGroups').innerHTML = renderGroups('income', incByCat, m.entries);
+}
+
+function renderGroups(type, byCat, entries){
+  const cats = state.categories[type];
+  if(cats.length===0) return '<div class="empty-note">No categories yet. Add one in Categories tab.</div>';
+  const groups = {};
+  cats.forEach(c=>{
+    groups[c.group] = groups[c.group] || [];
+    groups[c.group].push(c);
+  });
+  let html = '';
+  let anyEntries = false;
+  Object.keys(groups).forEach(g=>{
+    const rows = groups[g].map(c=>{
+      const amt = byCat[c.id] || 0;
+      const count = entries.filter(e=>e.categoryId===c.id).length;
+      if(amt>0) anyEntries = true;
+      const budget = c.budget || 0;
+      const over = type==='expense' && budget>0 && amt>budget;
+      return `<div class="cat-row ${type}${over?' over':''}" onclick="openDetail('${type}','${c.id}')">
+        <span class="name">${escapeHtml(c.name)}${count>0?`<span class="entries-count">(${count})</span>`:''}</span>
+        <div class="amt-wrap">
+          <span class="amt">${amt>0?fmt(amt):'—'}</span>
+          ${budget>0?`<span class="budget-note">of ${fmt(budget)}</span>`:''}
+        </div>
+      </div>`;
+    }).join('');
+    html += `<div class="group"><div class="group-name">${escapeHtml(g)}</div>${rows}</div>`;
+  });
+  if(!anyEntries){
+    html = '<div class="empty-note">Nothing logged yet this month.</div>' + html;
+  }
+  return html;
+}
+
+function renderHistory(){
+  const keys = Object.keys(state.months).sort().reverse();
+  const el = document.getElementById('historyList');
+  if(keys.length===0){ el.innerHTML = '<div class="empty-note">No months recorded yet.</div>'; return; }
+  el.innerHTML = keys.map(k=>{
+    const m = state.months[k];
+    let inc=0, exp=0;
+    m.entries.forEach(e=> e.type==='income' ? inc+=e.amount : exp+=e.amount);
+    const net = inc-exp;
+    const [y,mo] = k.split('-');
+    const label = new Date(y, mo-1, 1).toLocaleString('default',{month:'long', year:'numeric'});
+    return `<div class="history-row" onclick="jumpToMonth('${k}')">
+      <span class="m">${label}</span>
+      <span class="n" style="color:${net>=0?'var(--green)':'var(--red)'}">${fmt(net)}</span>
+    </div>`;
+  }).join('');
+}
+
+function jumpToMonth(key){
+  const [y,mo] = key.split('-');
+  currentDate = new Date(y, mo-1, 1);
+  currentMonthKey = key;
+  switchView('dashboard');
+  renderAll();
+}
+
+function renderCategoryManage(){
+  const expEl = document.getElementById('expCatManage');
+  const incEl = document.getElementById('incCatManage');
+  expEl.innerHTML = state.categories.expense.map(c=>catManageRow('expense', c)).join('');
+  incEl.innerHTML = state.categories.income.map(c=>catManageRow('income', c)).join('');
+}
+function catManageRow(type, c){
+  return `<div class="cat-manage-row">
+    <input type="text" value="${escapeHtml(c.name)}" onchange="renameCategory('${type}','${c.id}', this.value)">
+    <input type="number" value="${c.budget||''}" placeholder="0" class="budget-input" onchange="setCategoryBudget('${type}','${c.id}', this.value)">
+    <button onclick="deleteCategory('${type}','${c.id}')">&times;</button>
+  </div>`;
+}
+function renameCategory(type, id, newName){
+  const c = catById(type, id);
+  if(c) c.name = newName;
+  saveData();
+}
+function setCategoryBudget(type, id, val){
+  const c = catById(type, id);
+  if(c) c.budget = parseFloat(val) || 0;
+  saveData();
+  renderAll();
+}
+function deleteCategory(type, id){
+  const m = getMonth(currentMonthKey);
+  const used = m.entries.some(e=>e.categoryId===id);
+  if(used && !confirm('This category has entries this month. Delete anyway? Entries will stay but show as Unlabeled.')) return;
+  state.categories[type] = state.categories[type].filter(c=>c.id!==id);
+  saveData();
+  renderAll();
+}
+function addCategory(type){
+  const inputId = type==='expense' ? 'newExpCatName' : 'newIncCatName';
+  const budgetId = type==='expense' ? 'newExpCatBudget' : 'newIncCatBudget';
+  const input = document.getElementById(inputId);
+  const budgetInput = document.getElementById(budgetId);
+  const name = input.value.trim();
+  if(!name) return;
+  const id = name.toLowerCase().replace(/[^a-z0-9]+/g,'-') + '-' + Date.now().toString(36).slice(-4);
+  const budget = parseFloat(budgetInput.value) || 0;
+  state.categories[type].push({id, name, group:'Other', budget});
+  input.value=''; budgetInput.value='';
+  saveData();
+  renderAll();
+}
+
+// ---------- Scroll lock (prevents background scrolling under an open sheet) ----------
+let savedScrollY = 0;
+function lockScroll(){
+  savedScrollY = window.scrollY;
+  document.body.classList.add('modal-open');
+  document.body.style.top = -savedScrollY + 'px';
+}
+function unlockScroll(){
+  document.body.classList.remove('modal-open');
+  document.body.style.top = '';
+  window.scrollTo(0, savedScrollY);
+}
+
+// ---------- Entry detail ----------
+function openDetail(type, categoryId){
+  const m = getMonth(currentMonthKey);
+  const cat = catById(type, categoryId);
+  const entries = m.entries.filter(e=>e.type===type && e.categoryId===categoryId);
+  document.getElementById('detailTitle').textContent = cat ? cat.name : 'Category';
+  const list = document.getElementById('detailList');
+  if(entries.length===0){
+    list.innerHTML = '<div class="empty-note">No entries yet.</div>';
+  } else {
+    list.innerHTML = entries.map(e=>`
+      <div class="entry-list-item">
+        <span>${e.note ? escapeHtml(e.note) : '—'} <span class="meta">${e.date||''}</span></span>
+        <span class="amt">${fmt(e.amount)}</span>
+        <button class="del" onclick="deleteEntry('${e.id}')">&times;</button>
+      </div>`).join('');
+  }
+  document.getElementById('detailSheet').classList.add('open');
+  lockScroll();
+}
+function closeDetail(){
+  document.getElementById('detailSheet').classList.remove('open');
+  unlockScroll();
+}
+function deleteEntry(entryId){
+  const m = getMonth(currentMonthKey);
+  m.entries = m.entries.filter(e=>e.id!==entryId);
+  saveData();
+  renderAll();
+  closeDetail();
+}
+
+// ---------- Add entry ----------
+function setEntryType(type){
+  currentEntryType = type;
+  document.getElementById('typeExpenseBtn').classList.toggle('active', type==='expense');
+  document.getElementById('typeIncomeBtn').classList.toggle('active', type==='income');
+  populateCategorySelect();
+}
+function populateCategorySelect(){
+  const sel = document.getElementById('entryCategory');
+  const cats = state.categories[currentEntryType];
+  const groups = {};
+  cats.forEach(c=>{ (groups[c.group] = groups[c.group] || []).push(c); });
+  sel.innerHTML = Object.keys(groups).map(g=>
+    `<optgroup label="${escapeHtml(g)}">${groups[g].map(c=>`<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('')}</optgroup>`
+  ).join('');
+}
+function openAddSheet(){
+  setEntryType('expense');
+  document.getElementById('entryAmount').value = '';
+  document.getElementById('entryNote').value = '';
+  document.getElementById('addSheet').classList.add('open');
+  lockScroll();
+}
+function closeSheet(){
+  document.getElementById('addSheet').classList.remove('open');
+  unlockScroll();
+}
+function saveEntry(){
+  const amount = parseFloat(document.getElementById('entryAmount').value);
+  if(!amount || amount<=0){ alert('Enter a valid amount.'); return; }
+  const categoryId = document.getElementById('entryCategory').value;
+  const note = document.getElementById('entryNote').value.trim();
+  const m = getMonth(currentMonthKey);
+  m.entries.push({
+    id: 'e' + Date.now().toString(36) + Math.random().toString(36).slice(2,6),
+    type: currentEntryType,
+    categoryId, amount, note,
+    date: new Date().toISOString().slice(0,10)
+  });
+  saveData();
+  renderAll();
+  closeSheet();
+}
+
+// ---------- Navigation ----------
+function switchView(view){
+  ['dashboard','history','categories','settings'].forEach(v=>{
+    document.getElementById('view-'+v).style.display = (v===view)?'block':'none';
+  });
+  document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active', b.dataset.view===view));
+  document.getElementById('fabAdd').style.display = (view==='dashboard') ? 'flex' : 'none';
+}
+document.querySelectorAll('.tab').forEach(b=>{
+  b.addEventListener('click', ()=>switchView(b.dataset.view));
+});
+document.getElementById('fabAdd').addEventListener('click', openAddSheet);
+document.getElementById('prevMonth').addEventListener('click', ()=>{
+  currentDate.setMonth(currentDate.getMonth()-1);
+  currentMonthKey = monthKey(currentDate);
+  renderAll();
+});
+document.getElementById('nextMonth').addEventListener('click', ()=>{
+  currentDate.setMonth(currentDate.getMonth()+1);
+  currentMonthKey = monthKey(currentDate);
+  renderAll();
+});
+
+// ---------- Export / Import ----------
+function exportData(){
+  const code = btoa(unescape(encodeURIComponent(JSON.stringify(state))));
+  const hint = document.getElementById('exportHint');
+  if(navigator.share){
+    navigator.share({title:'Ledger Budget Export', text: code}).catch(()=>{});
+  }
+  navigator.clipboard && navigator.clipboard.writeText(code).catch(()=>{});
+  hint.innerHTML = 'Copied to clipboard. Paste it into a text/email to send, then paste into the Import box on the other phone.<br><br><span style="word-break:break-all; font-family:var(--mono); font-size:0.7rem;">'+code+'</span>';
+}
+function importData(){
+  const raw = document.getElementById('importArea').value.trim();
+  if(!raw) return;
+  try{
+    const incoming = JSON.parse(decodeURIComponent(escape(atob(raw))));
+    // merge months (incoming entries added to matching months, categories merged by id)
+    Object.keys(incoming.months||{}).forEach(k=>{
+      if(!state.months[k]) state.months[k] = {entries:[]};
+      const existingIds = new Set(state.months[k].entries.map(e=>e.id));
+      incoming.months[k].entries.forEach(e=>{
+        if(!existingIds.has(e.id)) state.months[k].entries.push(e);
+      });
+    });
+    ['expense','income'].forEach(type=>{
+      const existingIds = new Set(state.categories[type].map(c=>c.id));
+      (incoming.categories[type]||[]).forEach(c=>{
+        if(!existingIds.has(c.id)) state.categories[type].push(c);
+      });
+    });
+    saveData();
+    renderAll();
+    alert('Import complete.');
+    document.getElementById('importArea').value='';
+  }catch(e){
+    alert('Could not read that code. Double check it was copied fully.');
+  }
+}
+function resetAll(){
+  if(!confirm('Erase all budget data on this device? This cannot be undone.')) return;
+  state = { categories: JSON.parse(JSON.stringify(DEFAULT_CATEGORIES)), months: {} };
+  saveData();
+  renderAll();
+}
+
+// ---------- Init ----------
+populateCategorySelect();
+renderAll();
+
+if('serviceWorker' in navigator){
+  window.addEventListener('load', ()=>{
+    navigator.serviceWorker.register('sw.js').catch(()=>{});
+  });
+}
+</script>
+</body>
+</html>
